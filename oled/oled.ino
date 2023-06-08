@@ -1,5 +1,13 @@
-#include <OneWire.h>
-#include <DallasTemperature.h>
+void setup() {
+  // put your setup code here, to run once:
+
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+
+}
+#include <Arduino.h>
 #include <U8g2lib.h>
 
 #ifdef U8X8_HAVE_HW_SPI
@@ -8,10 +16,6 @@
 #ifdef U8X8_HAVE_HW_I2C
 #include <Wire.h>
 #endif
-
-#define ONE_WIRE_BUS 2
-OneWire oneWire(ONE_WIRE_BUS);
-DallasTemperature sensors(&oneWire);
 
 U8G2_SSD1327_MIDAS_128X128_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
@@ -43,13 +47,12 @@ void setup(void) {
   pinMode(9, OUTPUT);
   digitalWrite(10, 0);
   digitalWrite(9, 0);
+
   u8g2.begin();
-  sensors.begin();
 }
 
 void loop(void) {
-  sensors.requestTemperatures(); 
-  float temperature = sensors.getTempCByIndex(0);
+  float temperature = random(20, 30) + random(0, 10) / 10.0;
 
   u8g2.firstPage();
   do {
