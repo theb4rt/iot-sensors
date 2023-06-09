@@ -18,7 +18,7 @@ enum State {
 };
 
 DisplayMode displayMode = TEMPERATURE;
-State currentState = UNLOCKED;
+State currentState = LOCKED;
 
 #define JOY_X_PIN A7
 #define JOY_Y_PIN A6
@@ -28,9 +28,11 @@ State currentState = UNLOCKED;
 #define JOY_DEADZONE 100
 #define DEBOUNCE_DELAY 200
 #define REFRESH_INTERVAL 3000
+#define SEND_INTERVAL 5000
 
 unsigned long lastSwitchTime = 0;
 unsigned long lastRefreshTime = 0;
+unsigned long lastSendTime = 0;
 
 void u8g2_prepare(void) {
   u8g2.setFont(u8g2_font_ncenB14_tr);
@@ -110,7 +112,7 @@ void loop(void) {
       }
     }
   } else {
-    if ((joyY > JOY_CENTER + JOY_DEADZONE) || (joyX > JOY_CENTER + JOY_DEADZONE)) {
+    if (joyButton == LOW) {
       if ((millis() - lastSwitchTime) > DEBOUNCE_DELAY) {
         lastSwitchTime = millis();
         switch (displayMode) {
@@ -125,19 +127,36 @@ void loop(void) {
             break;
         }
       }
-    } else if ((joyY < JOY_CENTER - JOY_DEADZONE) || (joyX < JOY_CENTER - JOY_DEADZONE)) {
-      if ((millis() - lastSwitchTime) > DEBOUNCE_DELAY) {
-        lastSwitchTime = millis();
-        switch (displayMode) {
-          case TEMPERATURE:
-            displayMode = ANOTHER_SENSOR;
-            break;
-          case HUMIDITY:
-            displayMode = TEMPERATURE;
-            break;
-          case ANOTHER_SENSOR:
-            displayMode = HUMIDITY;
-            break;
+    } else {
+      if ((joyY > JOY_CENTER + JOY_DEADZONE) || (joyX > JOY_CENTER + JOY_DEADZONE)) {
+        if ((millis() - lastSwitchTime) > DEBOUNCE_DELAY) {
+          lastSwitchTime = millis();
+          switch (displayMode) {
+            case TEMPERATURE:
+              displayMode = HUMIDITY;
+              break;
+            case HUMIDITY:
+              displayMode = ANOTHER_SENSOR;
+              break;
+            case ANOTHER_SENSOR:
+              displayMode = TEMPERATURE;
+              break;
+          }
+        }
+      } else if ((joyY < JOY_CENTER - JOY_DEADZONE) || (joyX < JOY_CENTER - JOY_DEADZONE)) {
+        if ((millis() - lastSwitchTime) > DEBOUNCE_DELAY) {
+          lastSwitchTime = millis();
+          switch (displayMode) {
+            case TEMPERATURE:
+              displayMode = ANOTHER_SENSOR;
+              break;
+            case HUMIDITY:
+              displayMode = TEMPERATURE;
+              break;
+            case ANOTHER_SENSOR:
+              displayMode = HUMIDITY;
+              break;
+          }
         }
       }
     }
@@ -153,9 +172,18 @@ void loop(void) {
         draw_humidity(humidity);
         break;
       case ANOTHER_SENSOR:
-        float sensorValue = 0.0; // Replace this with the actual value
+        float sensorValue = 0.0;
         draw_another_sensor(sensorValue);
         break;
     }
   } while (u8g2.nextPage());
+
+  if (millis() - lastSendTime > SEND_INTERVAL) {
+    lastSendTime = millis();
+    Serial.print("Temperature: ");
+    Serial.println(temperature);
+    Serial.print("Humidity: ");
+    Serial.println(humidity);
+    Serial.println();
+  }
 }
