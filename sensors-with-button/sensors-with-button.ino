@@ -6,7 +6,7 @@
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
-U8G2_SSD1327_MIDAS_128X128_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+U8G2_SSD1327_MIDAS_128X128_1_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
 
 enum TemperatureUnit {
   CELSIUS,
@@ -15,11 +15,13 @@ enum TemperatureUnit {
 };
 TemperatureUnit tempUnit = CELSIUS;
 
-int buttonPin = 50;  // KY-004 button pin
-int buttonState = HIGH;  // current state of the button
-int lastButtonState = HIGH;  // previous state of the button
+const int BUTTON_PIN = 48;           // Button pin
+bool buttonState = HIGH;             // current state of the button
+bool lastButtonState = HIGH;         // previous state of the button
 unsigned long lastDebounceTime = 0;  // last time the button state changed
-unsigned long debounceDelay = 50;  // debounce delay in milliseconds
+unsigned long debounceDelay = 20;    // debounce delay in milliseconds
+unsigned long lastOLEDUpdateTime = 0; // last time the OLED was updated
+unsigned long oledUpdateDelay = 2000; // OLED update delay in milliseconds
 
 void u8g2_prepare(void) {
   u8g2.setFont(u8g2_font_ncenB14_tr);
@@ -72,29 +74,34 @@ void setup(void) {
   pinMode(9, OUTPUT);
   digitalWrite(10, 0);
   digitalWrite(9, 0);
-  pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
   u8g2.begin();
   sensors.begin();
   Serial.begin(9600);
+  u8g2_prepare();
 }
 
 void loop(void) {
-  sensors.requestTemperatures();
-  float temperature = sensors.getTempCByIndex(0);
+  //sensors.requestTemperatures();
+  //float temperature = sensors.getTempCByIndex(0);
+  float temperature = 11.01;
 
-  int reading = digitalRead(buttonPin);
+  int reading = digitalRead(BUTTON_PIN);
 
+  // Check if button state has changed
   if (reading != lastButtonState) {
-    lastDebounceTime = millis();  // reset the debounce timer
+    lastDebounceTime = millis(); // reset the debounce timer
   }
 
+  // If debounce period has passed
   if ((millis() - lastDebounceTime) > debounceDelay) {
-    // Button state has been stable for the debounce delay, update the button state
+    // If the button state has changed
     if (reading != buttonState) {
       buttonState = reading;
 
+      // If the button has just been pressed
       if (buttonState == LOW) {
-        // Button is pressed, cycle through temperature units
+        Serial.println("Button Pressed");
         switch (tempUnit) {
           case CELSIUS:
             tempUnit = FAHRENHEIT;
@@ -106,18 +113,19 @@ void loop(void) {
             tempUnit = CELSIUS;
             break;
         }
-        
-        Serial.println("Button Pressed");
       }
     }
   }
 
+  // Save the current button state for the next loop iteration
   lastButtonState = reading;
 
-  u8g2.firstPage();
-  do {
-    draw_temperature(temperature);
-  } while (u8g2.nextPage());
-
-  delay(2000); // Delay for 2 seconds before refreshing the display
+  // Update OLED display
+  if ((millis() - lastOLEDUpdateTime) > oledUpdateDelay) {
+    lastOLEDUpdateTime = millis(); // reset the OLED update timer
+    u8g2.firstPage();
+    do {
+      draw_temperature(temperature);
+    } while (u8g2.nextPage());
+  }
 }

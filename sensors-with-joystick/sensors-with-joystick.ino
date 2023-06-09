@@ -6,7 +6,7 @@
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
-U8G2_SSD1327_MIDAS_128X128_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+U8G2_SSD1327_MIDAS_128X128_1_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
 
 enum TemperatureUnit {
   CELSIUS,
@@ -15,7 +15,16 @@ enum TemperatureUnit {
 };
 TemperatureUnit tempUnit = CELSIUS;
 
-int previousJoystickX = 512; // Center position of joystick X-axis
+#define JOY_X_PIN A7
+#define JOY_Y_PIN A6
+#define JOY_BUTTON_PIN 52
+
+#define JOY_CENTER 512
+#define JOY_DEADZONE 100
+
+#define DEBOUNCE_DELAY 10          // Debounce time in milliseconds
+unsigned long lastSwitchTime = 0;  
+
 
 void u8g2_prepare(void) {
   u8g2.setFont(u8g2_font_ncenB14_tr);
@@ -61,21 +70,6 @@ void draw_temperature(float temperature) {
 
   u8g2.setFont(u8g2_font_unifont_t_symbols);
   u8g2.drawUTF8(54, 90, "℃");
-
-  //Serial.print("Temperature: ");
-  //Serial.print(tempToDisplay, 1);
-  //Serial.print(" ");
-  switch (tempUnit) {
-    case FAHRENHEIT:
-      //Serial.println("°F");
-      break;
-    case KELVIN:
-      //Serial.println("K");
-      break;
-    default:
-      //Serial.println("°C");
-      break;
-  }
 }
 
 void setup(void) {
@@ -83,35 +77,56 @@ void setup(void) {
   pinMode(9, OUTPUT);
   digitalWrite(10, 0);
   digitalWrite(9, 0);
+  pinMode(JOY_BUTTON_PIN, INPUT_PULLUP);
   u8g2.begin();
   sensors.begin();
   Serial.begin(9600);
+  u8g2_prepare();
 }
 
 void loop(void) {
-  sensors.requestTemperatures();
-  float temperature = sensors.getTempCByIndex(0);
+  float temperature = 11.01;
 
-  int joystickX = analogRead(A0); // Assuming joystick X-axis is connected to analog pin A0
+  int joyX = analogRead(JOY_X_PIN);
+  int joyY = analogRead(JOY_Y_PIN);
+  int joyButton = digitalRead(JOY_BUTTON_PIN);
 
-  if (joystickX > previousJoystickX + 100) {
-    // Joystick moved to the right
-    tempUnit = static_cast<TemperatureUnit>((tempUnit + 1) % 3);
-    delay(300); // Debounce delay
-    Serial.println("Joystick moved to the right");
-  } else if (joystickX < previousJoystickX - 100) {
-    // Joystick moved to the left
-    tempUnit = static_cast<TemperatureUnit>((tempUnit + 2) % 3);
-    delay(300); // Debounce delay
-    Serial.println("Joystick moved to the left");
+
+  if ((joyY > JOY_CENTER + JOY_DEADZONE) || (joyX > JOY_CENTER + JOY_DEADZONE)) {
+    if ((millis() - lastSwitchTime) > DEBOUNCE_DELAY) {
+      lastSwitchTime = millis();
+      switch (tempUnit) {
+        case CELSIUS:
+          tempUnit = FAHRENHEIT;
+          break;
+        case FAHRENHEIT:
+          tempUnit = KELVIN;
+          break;
+        case KELVIN:
+          tempUnit = CELSIUS;
+          break;
+      }
+    }
   }
-
-  previousJoystickX = joystickX;
+  else if ((joyY < JOY_CENTER - JOY_DEADZONE) || (joyX < JOY_CENTER - JOY_DEADZONE)) {
+    if ((millis() - lastSwitchTime) > DEBOUNCE_DELAY) {
+      lastSwitchTime = millis();
+      switch (tempUnit) {
+        case CELSIUS:
+          tempUnit = KELVIN;
+          break;
+        case FAHRENHEIT:
+          tempUnit = CELSIUS;
+          break;
+        case KELVIN:
+          tempUnit = FAHRENHEIT;
+          break;
+      }
+    }
+  }
 
   u8g2.firstPage();
   do {
     draw_temperature(temperature);
   } while (u8g2.nextPage());
-
-  delay(2000); // Delay for 2 seconds before refreshing the display
 }
