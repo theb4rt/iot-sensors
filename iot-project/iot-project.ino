@@ -23,8 +23,11 @@
 #define REFRESH_INTERVAL 3000 //Refresh interval for OLED
 //#define SEND_INTERVAL 5000  //Sending interval from data to RasPi
 #define BUFFER_SIZE 12      // buffer before seeding data
-#define ALERT_THRESHOLD 26.0  // limit temperature to send alert
-#define BATCH_INTERVAL 60000  //time to send the block of data to RasPi - 60s
+#define BATCH_INTERVAL 10000  //time to send the block of data to RasPi - 60s
+
+// Read data from sensors every X seconds
+unsigned long lastReadTime = 0;
+#define READ_INTERVAL 2000
 
 U8G2_SSD1327_MIDAS_128X128_1_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 DHT dht(DHT_PIN, DHT11);
@@ -58,6 +61,13 @@ unsigned long lastSendTime = 0;
 SensorData buffer[BUFFER_SIZE];
 int bufferIndex = 0;
 bool alertFlag = false;
+
+float temperature = 0.0;
+float humidity = 0.0;
+
+float alert_threshold_temperature = 25.0; //Critical value for temperature
+float alert_threshold_humidity = 90.0; //Critical value for humidity
+bool led_state = false; //LED status - true: ON, false: OFF
 
 //Setting format from Oled display
 void u8g2_prepare(void) {
@@ -109,7 +119,7 @@ void add_to_buffer(float temperature, float humidity) {
 }
 
 void check_alert(float temperature) {
-    if (temperature > ALERT_THRESHOLD) {
+    if (temperature > alert_threshold_temperature) {
         alertFlag = true;
     }
 }
@@ -119,7 +129,7 @@ void send_buffer() {
 
     for (int i = 0; i < bufferIndex; i++) {
         JsonObject sensor = doc.createNestedObject();
-        sensor["timestamp"] = buffer[i].timestamp;
+//        sensor["timestamp"] = buffer[i].timestamp;
         sensor["temperature"] = buffer[i].temperature;
         sensor["humidity"] = buffer[i].humidity;
     }
@@ -128,14 +138,15 @@ void send_buffer() {
     Serial.println();
     bufferIndex = 0;
 }
+
 void send_alert(float temperature) {
-  DynamicJsonDocument doc(1024);
-  doc["alert"] = "Critical value";
-  doc["sensor"] = "temperature";
-  doc["value"] = temperature;
-  serializeJson(doc, Serial);
-  Serial.println();
-  alertFlag = false;
+    DynamicJsonDocument doc(1024);
+    doc["alert"] = "Critical value";
+    doc["sensor"] = "temperature";
+    doc["value"] = temperature;
+    serializeJson(doc, Serial);
+    Serial.println();
+    alertFlag = false;
 }
 
 void setup(void) {
@@ -153,8 +164,44 @@ void setup(void) {
 
 //Launching main loop
 void loop(void) {
-    float temperature = dht.readTemperature();
-    float humidity = dht.readHumidity();
+
+    if (Serial.available()) {
+        String jsonData = Serial.readStringUntil('\n');
+        StaticJsonDocument<200> doc;
+        DeserializationError error = deserializeJson(doc, jsonData);
+        if (error) {
+            Serial.println("Failed to parse JSON");
+            return;
+        }
+        const char *type = doc["type"];
+        if (strcmp(type, "change_value") == 0) {
+            if (doc.containsKey("alert_threshold_temperature")) {
+                alert_threshold_temperature = doc["alert_threshold_temperature"];
+            }
+
+            if (doc.containsKey("alert_threshold_humidity")) {
+                alert_threshold_humidity = doc["alert_threshold_humidity"];
+            }
+
+            if (doc.containsKey("led_alert")) {
+                led_state = doc["led_alert"];
+            }
+        }
+    }
+
+    // read the sensor every 2 seconds
+    if (millis() - lastReadTime > READ_INTERVAL) {
+        lastReadTime = millis();
+        temperature = dht.readTemperature();
+        humidity = dht.readHumidity();
+        add_to_buffer(temperature, humidity);
+        check_alert(temperature);
+
+        if (alertFlag) {
+            send_alert(temperature);
+        }
+    }
+
     int joyX = analogRead(JOY_X_PIN);
     int joyY = analogRead(JOY_Y_PIN);
     int joyButton = digitalRead(JOY_BUTTON_PIN);
@@ -180,7 +227,7 @@ void loop(void) {
                     break;
             }
         }
-    // If state is locked, joystick is enabled
+        // If state is locked, joystick is enabled
     } else {
         //If joystick is pressed, Lock Views
         if (joyButton == LOW) {
@@ -255,8 +302,7 @@ void loop(void) {
         }
     } while (u8g2.nextPage());
 
-    add_to_buffer(temperature, humidity);
-    check_alert(temperature);
+
 
     //Send data to serial if buffer is full or time is up
     if (millis() - lastSendTime > BATCH_INTERVAL) {
@@ -264,7 +310,5 @@ void loop(void) {
         send_buffer();
     }
 
-    if (alertFlag) {
-        send_alert(temperature);
-    }
+
 }
