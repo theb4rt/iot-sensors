@@ -16,6 +16,7 @@
 #define JOY_Y_PIN A6
 #define JOY_BUTTON_PIN 52
 
+
 //Settings
 #define JOY_CENTER 512 //limit center
 #define JOY_DEADZONE 100 // deadzone for joystick performance
@@ -29,6 +30,14 @@
 unsigned long lastReadTime = 0;
 #define READ_INTERVAL 2000
 
+//LED RGB PIN 
+//RGB led check pins
+#define LED_BLUE 44  // BLUE
+#define LED_RED 45    // RED
+#define LED_GREEN 46 // GREEN
+
+
+// Defining OLED display settings
 U8G2_SSD1327_MIDAS_128X128_1_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 DHT dht(DHT_PIN, DHT11);
 
@@ -65,9 +74,13 @@ bool alertFlag = false;
 float temperature = 0.0;
 float humidity = 0.0;
 
-float alert_threshold_temperature = 25.0; //Critical value for temperature
+float alert_threshold_temperature = 29.0; //Critical value for temperature
 float alert_threshold_humidity = 90.0; //Critical value for humidity
 bool led_state = false; //LED status - true: ON, false: OFF
+
+bool testMode = false;
+int actualLedOn = 99; //turn on certain color of LED
+
 
 //Setting format from Oled display
 void u8g2_prepare(void) {
@@ -119,21 +132,39 @@ void add_to_buffer(float temperature, float humidity) {
 }
 
 void check_alert(float temperature) {
-    if (temperature > alert_threshold_temperature) {
+
+    if (alert_threshold_temperature < temperature) {
         alertFlag = true;
+        controlRGBLED(2);
+        return 0;
+
     }
+
+    if (alert_threshold_temperature - 1 <= temperature && temperature <= alert_threshold_temperature) {
+
+        controlRGBLED(6);
+        return 0;
+
+    }
+
+    if (temperature < alert_threshold_temperature - 1) {
+
+        controlRGBLED(99);
+        return 0;
+    }
+
+
 }
 
+
 void send_buffer() {
-    DynamicJsonDocument doc(1024); // Json 1024Bytes
+    DynamicJsonDocument doc(1024); //Json 1024
 
     for (int i = 0; i < bufferIndex; i++) {
         JsonObject sensor = doc.createNestedObject();
-//        sensor["timestamp"] = buffer[i].timestamp;
         sensor["temperature"] = buffer[i].temperature;
         sensor["humidity"] = buffer[i].humidity;
     }
-
     serializeJson(doc, Serial);
     Serial.println();
     bufferIndex = 0;
@@ -141,6 +172,7 @@ void send_buffer() {
 
 void send_alert(float temperature) {
     DynamicJsonDocument doc(1024);
+    doc["type"] = "alert";
     doc["alert"] = "Critical value";
     doc["sensor"] = "temperature";
     doc["value"] = temperature;
@@ -149,15 +181,107 @@ void send_alert(float temperature) {
     alertFlag = false;
 }
 
+void send_actual_data() {
+    DynamicJsonDocument doc(1024);
+    doc["type"] = "values";
+    doc["actual_led_on"] = actualLedOn;
+    doc["test_mode_status"] = testMode;
+    doc["actual_threshold_temperature"] = alert_threshold_temperature;
+    serializeJson(doc, Serial);
+    Serial.println();
+}
+
+
+void turnLEDOff() {
+    controlRGBLED(99);
+    //isLEDOn = false;
+}
+
+
+void controlRGBLED(int colorState) {
+    if (colorState >= 0 && colorState <= 9) {
+        switch (colorState) {
+            case 0:  // Violet1
+                analogWrite(LED_RED, 255);
+                analogWrite(LED_GREEN, 43);
+                analogWrite(LED_BLUE, 255);
+                break;
+            case 1:
+                // Violet2
+                analogWrite(LED_RED, 138);
+                analogWrite(LED_GREEN, 43);
+                analogWrite(LED_BLUE, 226);
+                break;
+            case 2:  // Red
+                analogWrite(LED_RED, 255);
+                analogWrite(LED_GREEN, 0);
+                analogWrite(LED_BLUE, 0);
+                break;
+            case 3:  //random
+                analogWrite(LED_RED, 128);
+                analogWrite(LED_GREEN, 128);
+                analogWrite(LED_BLUE, 128);
+                break;
+
+            case 4:
+                // Magenta
+                analogWrite(LED_RED, 255);
+                analogWrite(LED_GREEN, 0);
+                analogWrite(LED_BLUE, 255);
+                break;
+            case 5:  // Yellow
+                analogWrite(LED_RED, 255);
+                analogWrite(LED_GREEN, 255);
+                analogWrite(LED_BLUE, 0);
+                break;
+            case 6:  // Orange
+                analogWrite(LED_RED, 255);
+                analogWrite(LED_GREEN, 165);
+                analogWrite(LED_BLUE, 0);
+                break;
+            case 7:  // Cyan
+                analogWrite(LED_RED, 0);
+                analogWrite(LED_GREEN, 255);
+                analogWrite(LED_BLUE, 255);
+                break;
+            case 8: // Blue
+                analogWrite(LED_RED, 0);
+                analogWrite(LED_GREEN, 0);
+                analogWrite(LED_BLUE, 255);
+                break;
+            case 9: // Green
+                analogWrite(LED_RED, 0);
+                analogWrite(LED_GREEN, 255);
+                analogWrite(LED_BLUE, 0);
+                break;
+        }
+    } else {
+        analogWrite(LED_RED, 0);
+        analogWrite(LED_GREEN, 0);
+        analogWrite(LED_BLUE, 0);
+    }
+}
+
+
 void setup(void) {
-    pinMode(10, OUTPUT);
-    pinMode(9, OUTPUT);
-    digitalWrite(10, 0);
-    digitalWrite(9, 0);
+
+    //Joystick
     pinMode(JOY_BUTTON_PIN, INPUT_PULLUP);
+
+
+    //OLED begin
     u8g2.begin();
     dht.begin();
+
+    //Serial
     Serial.begin(9600);
+
+    //LED RGB
+    pinMode(LED_RED, OUTPUT);
+    pinMode(LED_GREEN, OUTPUT);
+    pinMode(LED_BLUE, OUTPUT);
+
+    //OLED init
     u8g2_prepare();
 }
 
@@ -170,7 +294,7 @@ void loop(void) {
         StaticJsonDocument<200> doc;
         DeserializationError error = deserializeJson(doc, jsonData);
         if (error) {
-            Serial.println("Failed to parse JSON");
+            Serial.println("Not valid data");
             return;
         }
         const char *type = doc["type"];
@@ -185,7 +309,19 @@ void loop(void) {
 
             if (doc.containsKey("led_alert")) {
                 led_state = doc["led_alert"];
+                if (led_state) {
+                    controlRGBLED(0);
+                } else {
+                    controlRGBLED(99);
+                }
             }
+
+        } else if (strcmp(type, "get_actual_values") == 0) {
+            send_actual_data();
+//                if (doc.containsKey("ask_status_led")) {
+//                   send_actual_data();
+//              }
+
         }
     }
 
@@ -195,13 +331,17 @@ void loop(void) {
         temperature = dht.readTemperature();
         humidity = dht.readHumidity();
         add_to_buffer(temperature, humidity);
-        check_alert(temperature);
 
-        if (alertFlag) {
-            send_alert(temperature);
+        if (!testMode) {
+            check_alert(temperature);
+
+            if (alertFlag) {
+                send_alert(temperature);
+            }
         }
-    }
 
+    }
+    //Readings from joystick
     int joyX = analogRead(JOY_X_PIN);
     int joyY = analogRead(JOY_Y_PIN);
     int joyButton = digitalRead(JOY_BUTTON_PIN);
