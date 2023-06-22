@@ -186,6 +186,7 @@ void send_actual_data() {
     doc["type"] = "values";
     doc["actual_led_on"] = actualLedOn;
     doc["test_mode_status"] = testMode;
+    doc["alert_led_state"] = led_state;
     doc["actual_threshold_temperature"] = alert_threshold_temperature;
     serializeJson(doc, Serial);
     Serial.println();
@@ -314,6 +315,16 @@ void loop(void) {
                 } else {
                     controlRGBLED(99);
                 }
+            }
+
+            if (doc.containsKey("led_color")) {
+                int led_color = doc["led_color"];
+                controlRGBLED(led_color);
+
+            }
+
+            if (doc.containsKey("test_mode")) {
+                testMode = doc["test_mode"];
             }
 
         } else if (strcmp(type, "get_actual_values") == 0) {

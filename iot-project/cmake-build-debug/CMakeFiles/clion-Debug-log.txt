@@ -1,0 +1,1 @@
+CMakeLists.txt not found in /home/b4rt/Arduino/iot-sensors/iot-project Select CMakeLists.txt
