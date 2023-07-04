@@ -45,7 +45,7 @@ DHT dht(DHT_PIN, DHT11);
 enum DisplayMode {
     TEMPERATURE,
     HUMIDITY,
-    ANOTHER_SENSOR
+    //ANOTHER_SENSOR
 };
 
 //state of display LOCKED:Views changing automatically - Joystick disabled, UNLOCKED: Views locked - Joystick enabled
@@ -91,27 +91,53 @@ void u8g2_prepare(void) {
     u8g2.setFontDirection(0);
 }
 
+
+
 //Drawing views
 void draw_temperature(float temperature) {
+    char temp[10];
+    dtostrf(temperature, 6, 1, temp);
     u8g2_prepare();
-    u8g2.setCursor(10, 10);
-    u8g2.print("Temp:");
-    u8g2.setFont(u8g2_font_ncenB24_tr);
-    u8g2.setCursor(10, 50);
+    u8g2.setFont(u8g2_font_t0_17_mf);
+    int x = (u8g2.getDisplayWidth() - u8g2.getStrWidth("Temperature:")) / 2;
+    u8g2.setCursor(x, 10);
+    u8g2.print("Temperature:");
+    u8g2.setFont(u8g2_font_inb30_mn);
+    x = (u8g2.getDisplayWidth() - u8g2.getStrWidth(temp));
+    u8g2.setCursor(15, 45);
     u8g2.print(temperature, 1);
-    u8g2.print(" C");
+    u8g2.setFont(u8g2_font_unifont_t_symbols);
+    u8g2.print('\xB0');
+    x = u8g2.getDisplayWidth() / 3;
+    u8g2.setCursor(x, 90);
+    u8g2.setFont(u8g2_font_unifont_t_symbols);
+    u8g2.print('\xB0');
+    u8g2.setFont(u8g2_font_ncenB18_tr);
+    u8g2.setFontRefHeightExtendedText();
+    u8g2.print("C");
 }
 
 
 void draw_humidity(float humidity) {
+    char hum[10];
+    dtostrf(humidity, 6, 1, hum);
+    
     u8g2_prepare();
-    u8g2.setCursor(10, 10);
+    u8g2.setFont(u8g2_font_crox3c_mr);
+    int x = (u8g2.getDisplayWidth() - u8g2.getStrWidth("Humidity:")) / 2;
+    u8g2.setCursor(x, 10);
     u8g2.print("Humidity:");
-    u8g2.setFont(u8g2_font_ncenB24_tr);
-    u8g2.setCursor(10, 50);
+    u8g2.setFont(u8g2_font_inb30_mn);
+    x = (u8g2.getDisplayWidth() - u8g2.getStrWidth(hum)) / 2;
+    u8g2.setCursor(15, 45);
+    u8g2.setFontRefHeightExtendedText();
     u8g2.print(humidity, 1);
+    u8g2.setFont(u8g2_font_ncenB18_tr);
+    x = (u8g2.getDisplayWidth() - u8g2.getStrWidth(" %")) / 2;
+    u8g2.setCursor(x, 90);
     u8g2.print(" %");
 }
+
 
 void draw_another_sensor(float value) {
     u8g2_prepare();
@@ -370,10 +396,10 @@ void loop(void) {
                 case TEMPERATURE:
                     displayMode = HUMIDITY;
                     break;
+                //case HUMIDITY:
+                //    displayMode = ANOTHER_SENSOR;
+                //    break;
                 case HUMIDITY:
-                    displayMode = ANOTHER_SENSOR;
-                    break;
-                case ANOTHER_SENSOR:
                     displayMode = TEMPERATURE;
                     break;
             }
@@ -388,10 +414,10 @@ void loop(void) {
                     case TEMPERATURE:
                         displayMode = HUMIDITY;
                         break;
+                    //case HUMIDITY:
+                    //    displayMode = ANOTHER_SENSOR;
+                    //    break;
                     case HUMIDITY:
-                        displayMode = ANOTHER_SENSOR;
-                        break;
-                    case ANOTHER_SENSOR:
                         displayMode = TEMPERATURE;
                         break;
                 }
@@ -405,10 +431,10 @@ void loop(void) {
                         case TEMPERATURE:
                             displayMode = HUMIDITY;
                             break;
+                        //case HUMIDITY:
+                        //    displayMode = ANOTHER_SENSOR;
+                        //    break;
                         case HUMIDITY:
-                            displayMode = ANOTHER_SENSOR;
-                            break;
-                        case ANOTHER_SENSOR:
                             displayMode = TEMPERATURE;
                             break;
                     }
@@ -419,13 +445,13 @@ void loop(void) {
                     lastSwitchTime = millis();
                     switch (displayMode) {
                         case TEMPERATURE:
-                            displayMode = ANOTHER_SENSOR;
+                            displayMode = HUMIDITY;
                             break;
+                        //case HUMIDITY:
+                        //    displayMode = TEMPERATURE;
+                        //    break;
                         case HUMIDITY:
                             displayMode = TEMPERATURE;
-                            break;
-                        case ANOTHER_SENSOR:
-                            displayMode = HUMIDITY;
                             break;
                     }
                 }
@@ -446,10 +472,10 @@ void loop(void) {
             case HUMIDITY:
                 draw_humidity(humidity);
                 break;
-            case ANOTHER_SENSOR:
-                float sensorValue = 0.0;
-                draw_another_sensor(sensorValue);
-                break;
+            //case ANOTHER_SENSOR:
+            //    float sensorValue = 0.0;
+            //    draw_another_sensor(sensorValue);
+            //    break;
         }
     } while (u8g2.nextPage());
 
